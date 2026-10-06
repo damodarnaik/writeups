@@ -1,2 +1,2 @@
-# blogs
+# Writeups
 Technical blogs!!!!!!
