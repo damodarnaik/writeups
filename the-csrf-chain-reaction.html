@@ -329,7 +329,7 @@
   <h2><span class="no">03</span>The Methodology (The "How")</h2>
   <p>This is the part actually worth your time, so we'll slow down. Everything after this is just execution.</p>
 
-  <h3>Lesson 1: Uploads Plus a Custom Token Means Go Poke At It</h3>
+  <h3>Lesson 1: Uploads plus a custom token means go poke at it</h3>
   <p>When we map out an app, we keep a running list of the features where a small mistake has an outsized payoff. File uploads sit near the top of that list, right up there with auth and anything that renders user input. So the moment we saw a File Manager, we knew where the afternoon was going.</p>
   <p>We uploaded a plain, boring file and captured the request in Burp. That's the first thing to do with any upload: watch a normal request go through before you try to break anything. You can't cheat the rules until you know what they are.</p>
   <p>Trimmed down, the request looked like this:</p>
@@ -360,7 +360,7 @@ hello world
   <p>Two things stood out right away. The <code>hash</code> and <code>hash2</code> fields were obviously a home-grown anti-CSRF token scheme. And the request was authenticated purely by the <code>PHPSESSID</code> cookie, nothing else.</p>
   <p>That pairing is a big red flag. Cookie-based auth is exactly what CSRF feeds on, and the only thing standing between us and a forged cross-site request was those two hash values. So the whole thing came down to a single question: does the server actually check them?</p>
 
-  <h3>Lesson 2: A Token Being Present Doesn't Mean It's Being Checked</h3>
+  <h3>Lesson 2: A token being present doesn't mean it's being checked</h3>
   <p>This is the mindset we'd most like you to take away. Developers love to drop a token onto a form and call it CSRF-protected. But a token only protects anything if the server does three things: generates it unpredictably, ties it to your session, and rejects the request when the value is wrong or missing.</p>
   <p>Plenty of custom implementations get the first two right and completely fumble the third. They write <code>if (isset($hash))</code> where they meant <code>if ($hash === $expected)</code>. They compare against an empty string. They pass on any value that's simply truthy. The token looks legit, but it's a bouncer who checks that you're holding a ticket without ever reading it.</p>
   <p>So we tested it in the dumbest way available. No leaking the real token, no reversing the algorithm. We just filled both fields with zeroes:</p>
@@ -378,13 +378,13 @@ hash2 = <span class="tok-zero">00000000000000000000000000000000</span></code></p
     <p><strong>Worth internalizing:</strong> any time you run into a custom token, try the cheap stuff before anything clever. Remove it, blank it, zero it, reuse yesterday's, drop in another user's. You'll be surprised how often one of those just works.</p>
   </blockquote>
 
-  <h3>Lesson 3: A CSRF Bypass Is a Capability, Not The Finish Line</h3>
+  <h3>Lesson 3: A CSRF bypass is a capability, not the finish line</h3>
   <p>A lot of people would stop here, write up "CSRF on file upload," and file a medium. We think that sells it short. A CSRF bypass on an upload endpoint isn't really a vulnerability on its own, it's a capability: it lets us make a logged-in admin's browser write an arbitrary file to the server just by getting them to open a page.</p>
   <p>Which turns the interesting question into "what file do we write?" And that's where the same root cause split into two very different, very unpleasant chains. This is the other half of the method: once you've got a write primitive, figure out what the upload filter actually blocks, then step around it.</p>
 
   <h2><span class="no">04</span>The Exploitation (The "Proof")</h2>
 
-  <h3>Chain 1: <code>.phar</code> Upload To Remote Code Execution (<span class="cve cve-rce"></span>)</h3>
+  <h3>Chain 1: <code>.phar</code> upload to remote code execution (<span class="cve cve-rce"></span>)</h3>
   <p>The upload filter blocked <code>.php</code>. Decent instinct from the developers, but it was a blacklist, not an allowlist. A blacklist is a promise to remember every dangerous thing forever, and nobody ever does.</p>
   <p>PHP will execute more than just <code>.php</code>. Depending on the server config, <code>.phar</code>, <code>.phtml</code>, <code>.php5</code>, <code>.php7</code> and a few others all get interpreted too. The blacklist forgot about <code>.phar</code>. We didn't.</p>
   <p>So we built a CSRF page that forges the upload with our zeroed token and drops a <code>.phar</code> webshell into the web-accessible plugin directory:</p>
@@ -439,7 +439,7 @@ hash2 = <span class="tok-zero">00000000000000000000000000000000</span></code></p
 
   <p>Code execution, on a monitoring server. That's the ball game.</p>
 
-  <h3>Chain 2: SVG Upload To Stored XSS And Session Hijack (<span class="cve cve-xss"></span>)</h3>
+  <h3>Chain 2: SVG upload to stored XSS and session hijack (<span class="cve cve-xss"></span>)</h3>
   <p>Say PHP execution had actually been locked down in that upload directory. Are we done? Not really, because the same broken token hands us a second path that doesn't need code execution at all.</p>
   <p>The File Manager accepts SVG uploads. Here's the part people forget: an SVG isn't really an image, it's an XML document that a browser will run JavaScript out of. If the server stores your SVG and later serves it inline, any <code>&lt;script&gt;</code> inside it runs in the application's origin. That's stored XSS, straight out of the textbook.</p>
   <p>Our SVG payload:</p>
@@ -532,7 +532,7 @@ hash2 = <span class="tok-zero">00000000000000000000000000000000</span></code></p
   <p>For a platform whose whole job is watching the network for trouble, it doesn't get much worse. The watcher ends up being the intruder's own set of eyes.</p>
 
   <h2><span class="no">06</span>The Fix &amp; Takeaways</h2>
-  <h3>How It Should Be Fixed</h3>
+  <h3>How it should be fixed</h3>
   <p>The root cause is a single broken check, so fix that first and then harden the sinks around it:</p>
   <ul>
     <li><strong>Fix the CSRF check for real.</strong> Generate cryptographically random, session-bound tokens and validate them with a strict, constant-time comparison. Reject static, null-padded, blank, or malformed values instead of waving them through.</li>
@@ -543,7 +543,7 @@ hash2 = <span class="tok-zero">00000000000000000000000000000000</span></code></p
   </ul>
   <p>It's worth noticing how many independent layers all had to fail at once for this to work: the token, the extension filter, the execution policy, the content-type handling, the cookie flags. Defense in depth isn't paranoia, it's the difference between a near miss and a headline.</p>
 
-  <h3>Three Things To Take With You</h3>
+  <h3>Three things to take with you</h3>
   <ol>
     <li><strong>Test the token you're being told to trust.</strong> Custom anti-CSRF, anti-replay, and signature checks are very often just present rather than enforced. Before you reach for anything sophisticated, try the cheap attacks: delete it, blank it, zero it, reuse it, swap it. The zeroes that kicked off this whole story took about ten seconds to try.</li>
     <li><strong>A write primitive is a launchpad, so enumerate the filter.</strong> Once you can put a file on a server, don't stop at "arbitrary file upload." Ask what you can actually write. Blacklists leak (<code>.php</code> becomes <code>.phar</code>), image parsers execute (SVG becomes XSS). The severity lives in the payload you get away with, not in the upload itself.</li>
